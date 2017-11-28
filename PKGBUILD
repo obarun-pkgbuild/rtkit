@@ -1,33 +1,38 @@
 # Maintainer: Eric Vidal <eric@obarun.org>
-# based on the original https://projects.archlinux.org/svntogit/packages.git/tree/trunk?h=packages/rtkit
-# 						Maintainer: Jan Alexander Steffens (heftig) <jan.steffens@gmail.com>
-# 						Contributor: Corrado Primier <bardo@aur.archlinux.org>
+
 
 pkgname=rtkit
-pkgver=0.11
-pkgrel=6
+pkgver=0.11+8+ge0a51fe
+pkgrel=2
 pkgdesc="Realtime Policy and Watchdog Daemon"
 arch=(x86_64)
-url="http://git.0pointer.de/?p=rtkit.git"
+url="https://github.com/heftig/rtkit"
 license=(GPL 'custom:BSD')
 depends=('dbus' 'polkit')
-optdepends=('rtkit-s6serv: rtkit s6 service'
-			'rtkit-runitserv: rtkit runit service')
-install=rtkit.install
-source=(http://0pointer.de/public/${pkgname}-$pkgver.tar.xz
-        0001-SECURITY-Pass-uid-of-caller-to-polkit.patch)
-md5sums=('a96c33b9827de66033d2311f82d79a5d'
-         '70df212cba2a6366ff960b60d55858d3')
+makedepends=(git)
+_commit=e0a51fe262ff7167622a8e58f876a663b9471124 # master
+source=("git+https://github.com/heftig/rtkit#commit=$_commit"
+		'rtkit.sysusers'
+		'keep-daemon-independent.patch')
+sha256sums=('SKIP'
+            'fd2ec923f003147f1a6ced0a5e11f652bc743edb5a5912f4ad54cc0d89162a75'
+            '7972c38584729f41a5d95f40c753267acc3c9492fc18f40475e9f0278f448d67')
 validpgpkeys=('6DD4217456569BA711566AC7F06E8FDE7B45DAAC') # Eric Vidal
 
+pkgver() {
+  cd $pkgname
+  git describe --tags | sed 's/^v//;s/-/+/g'
+}
+
 prepare() {
-  cd ${pkgname}-$pkgver
-  patch -Np1 -i ../0001-SECURITY-Pass-uid-of-caller-to-polkit.patch
-  autoreconf -fi
+  cd $pkgname
+  # Keep daemon independant
+  patch -Np1 -i ${srcdir}/keep-daemon-independent.patch
+  ./autogen.sh
 }
 
 build() {
-  cd ${pkgname}-$pkgver
+  cd ${pkgname}
   ./configure \
     --prefix=/usr \
     --sbindir=/usr/bin \
@@ -40,12 +45,15 @@ build() {
 }
 
 package() {
-  cd ${pkgname}-$pkgver
+  cd ${pkgname}
+  
   make DESTDIR="$pkgdir" install
 
-  install -Dm644 org.freedesktop.RealtimeKit1.xml \
-    "$pkgdir/usr/share/dbus-1/interfaces/org.freedesktop.RealtimeKit1.xml"
+  install -Dt "$pkgdir/usr/share/dbus-1/interfaces" -m644 org.freedesktop.RealtimeKit1.xml
 
-  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/${pkgname}/LICENSE"
-  sed -ne '4,25p' rtkit.c >"$pkgdir/usr/share/licenses/${pkgname}/COPYING"
+  install -Dm644 "$srcdir/rtkit.sysusers" "$pkgdir/usr/lib/sysusers.d/$pkgname.conf"
+
+  sed -ne '4,25p' rtkit.c |
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/licenses/$pkgname/COPYING"
+  install -Dt "$pkgdir/usr/share/licenses/$pkgname" -m644 LICENSE
 }
